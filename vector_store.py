@@ -76,7 +76,7 @@ class VectorStoreHandler(Handler):
 
         return self.vector_store
 
-    def load_docs_in_vector_store(self, docs):
+    def load_docs_in_vector_store(self, docs, company_name=None, company_sectors=None):
         """
         docs: list[str] -> [
             {
@@ -92,6 +92,10 @@ class VectorStoreHandler(Handler):
         # add model_name to docs metadata
         for i in range(len(docs)):
             docs[i].metadata["model_name"] = self.model_name
+            if company_name:
+                docs[i].metadata["company_name"] = company_name
+            if company_sectors:
+                docs[i].metadata["company_sectors"] = company_sectors
 
         for doc in docs:
             hashed_input = self.hash_doc(doc)
@@ -116,8 +120,7 @@ class VectorStoreHandler(Handler):
             logger.info(
                 f"[{datetime.now()}] The following documents {unallowed_docs} are already in the db. Skipping...")
 
-        for hash, doc in tqdm(zip(allowed_hashes,
-                                  allowed_docs)):  # processing docs and hashes one-by-one to prevent db connection drops (https://docs.sqlalchemy.org/en/20/errors.html#error-e3q8)
+        for hash, doc in tqdm(zip(allowed_hashes, allowed_docs)):  # processing docs and hashes one-by-one to prevent db connection drops (https://docs.sqlalchemy.org/en/20/errors.html#error-e3q8)
             self.vector_store.add_documents([doc], ids=[hash])
         end_time = time.time()
         logger.info(f"[{datetime.now()}] Added {len(allowed_docs)} documents in {end_time - start_time} seconds")
@@ -135,7 +138,7 @@ class VectorStoreHandler(Handler):
         logger.info(f"[{datetime.now()}] Removed {ids} documents in {end_time - start_time} seconds")
 
     @functools.cache
-    def query_by_similarity(self, query, k=50, filters=(), with_scores=False):
+    def query_by_similarity(self, query, k=5, filters=(), with_scores=False):
         d_filter = {}
         for i in range(len(filters)):
             d_filter[filters[i][0]] = filters[i][1]
@@ -172,7 +175,7 @@ class SparseStoreHandler(Handler):
         self.model_name = args["syn_model_name"]
         self.pgconnector = PgVectorConnector()
 
-    def load_docs_in_sparse_store(self, docs):
+    def load_docs_in_sparse_store(self, docs, company_name=None, company_sectors=None):
         start_time = time.time()
         logger.info(f"[{datetime.now()}] Adding {len(docs)} documents into the sparse store...")
         hashes = []
@@ -180,6 +183,10 @@ class SparseStoreHandler(Handler):
         # add model_name to docs metadata
         for i in range(len(docs)):
             docs[i].metadata["model_name"] = self.model_name
+            if company_name:
+                docs[i].metadata["company_name"] = company_name
+            if company_sectors:
+                docs[i].metadata["company_sectors"] = company_sectors
 
         for doc in docs:
             hashed_input = self.hash_doc(doc)
@@ -212,7 +219,9 @@ class SparseStoreHandler(Handler):
                 doc.metadata["source"],
                 doc.page_content,
                 doc.metadata["page"],
-                self.model_name
+                self.model_name,
+                doc.metadata.get("company_name"),
+                doc.metadata.get("company_sectors")
             )
 
             self.pgconnector.add_page(conn, elements_to_add)
@@ -222,7 +231,7 @@ class SparseStoreHandler(Handler):
         logger.info(f"[{datetime.now()}] Added {len(allowed_docs)} documents in {end_time - start_time} seconds")
 
     @functools.cache
-    def query_by_similarity(self, query, source, k=50, with_scores=False):
+    def query_by_similarity(self, query, source, k=5, with_scores=False):
         conn = self.pgconnector.start_db_connection()
         docs, docs_lowered = self.pgconnector.get_pages(conn, source)
 
@@ -245,14 +254,14 @@ class SparseStoreHandler(Handler):
             results = result_with_scores
 
         return results
-
+    
 
 class EnsembleRetrieverHandler(SparseStoreHandler, VectorStoreHandler):
     def __init__(self, args):
         super(EnsembleRetrieverHandler, self).__init__(args)
         self.lmbd = args["lambda"]
 
-    def combine_results(self, semantic_results, syntactic_results, k=50, lmbd=.3):
+    def combine_results(self, semantic_results, syntactic_results, k=5, lmbd=.3):
         results = {}
         res_debug = {}
         for i, r in enumerate([semantic_results, syntactic_results]):
@@ -280,7 +289,7 @@ class EnsembleRetrieverHandler(SparseStoreHandler, VectorStoreHandler):
         return [el[0] for el in values]
 
     @functools.cache
-    def query_by_similarity(self, query, filters, k=50):
+    def query_by_similarity(self, query, filters, k=5):
         if len(filters) == 0:
             raise ValueError(f"\"filters\" param cannot be empty")
         if filters[0][0] != "source":
@@ -289,9 +298,9 @@ class EnsembleRetrieverHandler(SparseStoreHandler, VectorStoreHandler):
             raise ValueError(f"the value of the \"source\" param must be a string")
 
         self.get_vector_store()
-        semantic_results = VectorStoreHandler.query_by_similarity(self, query, k=500, filters=filters,
+        semantic_results = VectorStoreHandler.query_by_similarity(self, query, k=5, filters=filters,
                                                                   with_scores=True)
-        syntactic_results = SparseStoreHandler.query_by_similarity(self, query, source=filters[0][1], k=500,
+        syntactic_results = SparseStoreHandler.query_by_similarity(self, query, source=filters[0][1], k=5,
                                                                    with_scores=True)
 
         results = self.combine_results(semantic_results, syntactic_results, k=k, lmbd=self.lmbd)
