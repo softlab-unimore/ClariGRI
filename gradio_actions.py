@@ -14,11 +14,34 @@ def get_docs_from_db():
         result = cur.fetchall()
 
     connector.close_db_connection(conn)
-    return [r[0] for r in result]  # lista di stringhe (es. titoli PDF)
+    return [r[0] for r in result]
+
+def get_sectors_from_db():
+    connector = PgVectorConnector()
+    conn = connector.start_db_connection()
+
+    query = f"""
+            SELECT DISTINCT unnest(company_sectors) 
+            FROM {os.environ['POSTGRES_SPARSE_TABLE_NAME']}
+            WHERE company_sectors IS NOT NULL;
+        """
+
+    with conn.cursor() as cur:
+        cur.execute(query)
+        result = cur.fetchall()
+
+    # Estrae i valori dalla lista di tuple
+    sectors = [row[0] for row in result if row[0]]
+    connector.close_db_connection(conn)
+    return sectors
 
 def update_docs_list():
     docs = get_docs_from_db()
     return gr.update(choices=docs, value=[])
+
+def update_sectors_list():
+    sectors = get_sectors_from_db()
+    return gr.update(choices=sectors, value=[])
 
 def print_like_dislike(x: gr.LikeData):
     print(x.index, x.value, x.liked)
@@ -30,6 +53,10 @@ def refresh_pdf_folders():
 
 def refresh_docs_list():
     choices = get_docs_from_db()
+    return gr.update(choices=choices, value=[])
+
+def refresh_sectors_list():
+    choices = get_sectors_from_db()
     return gr.update(choices=choices, value=[])
 
 # funzione che elenca le cartelle disponibili in table_dataset
