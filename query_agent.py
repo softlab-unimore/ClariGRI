@@ -133,12 +133,57 @@ class QueryAgent:
         list_of_rules = self.remove_markdown_syntax(self.extract_result(list_of_rules_raw, "Final answer:"))
         return list_of_rules
 
-    def table_insertion(self, texts: list[str], tables: Dict[int, List[pd.DataFrame]]) -> List[str]:
+    def table_insertion(self, texts: list[str], tables: Dict[Union[int, str], List[pd.DataFrame]]) -> List[str]:
+        """
+        Inserisce nelle stringhe 'texts' le tabelle HTML corrispondenti.
+        'tables' può essere:
+          - un dict con chiavi intere contigue (0..n-1) corrispondenti agli indici di texts, oppure
+          - un dict con chiavi arbitrarie (es. nomi di settori o filenames). In questo caso si usa l'ordine di list(tables.values()).
+        Se il numero di elementi in texts e in tables non coincide, la funzione fa un best-effort:
+          - usa min(len(texts), len(tables_list)) e non tocca i testi in eccesso.
+        """
+        # Normalizza tables in una lista la cui i-esima entry corrisponde al texts[i]
+        # Caso 1: chiavi numeriche contigue 0..n-1
+        try:
+            numeric_keys = all(isinstance(k, int) for k in tables.keys())
+        except Exception:
+            numeric_keys = False
+
+        if numeric_keys:
+            # Verifica che le chiavi siano contigue a partire da 0
+            keys_sorted = sorted(tables.keys())
+            if keys_sorted == list(range(len(keys_sorted))):
+                tables_list = [tables[i] for i in range(len(keys_sorted))]
+            else:
+                # Non contigue: trasformiamo comunque in lista ordinata per chiave crescente
+                tables_list = [tables[k] for k in keys_sorted]
+        else:
+            # Chiavi non numeriche: usa ordine di inserimento / values()
+            tables_list = list(tables.values())
+
         new_texts = []
+        n = min(len(texts), len(tables_list))
+        # Per i testi oltre n, lasciamo il testo originale
         for i, text in enumerate(texts):
             new_text = text
-            for j in range(len(tables[i])):
-                new_text = new_text.replace(f"<Table{j + 1}>", tables[i][j].to_html(index=False))
+            if i < n:
+                tables_for_text = tables_list[i] or []
+                for j in range(len(tables_for_text)):
+                    # protezione: assicurati che la placeholder esista nel testo prima di sostituire
+                    placeholder = f"<Table{j + 1}>"
+                    if placeholder in new_text:
+                        # converti la table in html (index=False)
+                        try:
+                            new_text = new_text.replace(placeholder, tables_for_text[j].to_html(index=False))
+                        except Exception as e:
+                            print(f"DEBUG: errore convertendo table[{i}][{j}] in html: {e}", flush=True)
+                            new_text = new_text.replace(placeholder, "")  # fallback: rimuovi placeholder
+                    else:
+                        # placeholder non presente: potremmo comunque appendere la tabella o ignorare; per ora ignoriamo
+                        pass
+            else:
+                print(f"DEBUG: Nessuna tabella disponibile per texts[{i}] - lascio il testo originale.", flush=True)
+
             new_texts.append(new_text)
 
         return new_texts
@@ -198,7 +243,13 @@ class QueryAgent:
 
         # Final answer
         results = self.remove_markdown_syntax(self.extract_result(results, "Final answer:"))
-        final_string = "🧠Program of Thought in action\n" + python_text_raw + "\n\nResult :\n" + results
+
+        if results is not None:
+            final_string = "🧠Program of Thought in action\n" + python_text_raw + "\n\nResult :\n" + results
+
+        else:
+            final_string = "🧠Program of Thought in action\n" + python_text_raw
+
         print("final_string:\n", final_string)
 
         return final_string
