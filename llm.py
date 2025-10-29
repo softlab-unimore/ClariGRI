@@ -186,6 +186,8 @@ def formatted(folder_path, pdf_basename, chatbot=False):
            - Remove symbols or characters that are clearly OCR or extraction noise.
         9. Output **only the cleaned CSV content**, no explanations or comments.
         
+        REMEMBER THAT ALL ROWS MUST HAVE THE SAME NUMBER OF FIELDS!
+        
         Here is the CSV to process:
 
         {csv_content}
@@ -245,8 +247,8 @@ def get_company_name(pdf_path):
     except Exception as e:
         return f"⚠️ Errore nell'aprire il PDF: {str(e)}"
 
-    # Leggi le prime 4 pagine o meno se il PDF è più corto
-    max_pages = min(4, doc.page_count)
+    # Leggi le prime 3 pagine o meno se il PDF è più corto
+    max_pages = min(3, doc.page_count)
     text = ""
     for i in range(max_pages):
         page = doc[i]
@@ -285,5 +287,7 @@ def ask_openai(messages):
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"⚠️ Errore durante la chiamata a OpenAI: {str(e)}"
+
+
 
 
