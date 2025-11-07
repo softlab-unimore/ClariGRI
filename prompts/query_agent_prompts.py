@@ -49,8 +49,8 @@ Let's think step-by-step.
 prompt_total = """
 You must create the python code capable of answering the following question given the provided tables. First write your reasoning. Then, in the end, write "Final answer:" followed by the python code and nothing else. The Python code must be runnable "as it is", so make sure to include the relevant imports. At the end of the python function, print the result with print(). If you do not already do so, specify ```python before the Python code and ``` at the end of the Python code.
 If the question is boolean, the output must be exclusively a 'yes' or 'no' answer. If the question asks for a list of values, you must answer with a list of values separated with a comma. Write the numerical values with exactly 2 decimal values.
-Ensure that the final answer is in the expected form. Do not write anything else after "Final answer:". Do not use Markdown syntax.
-Start the response by saying something along the lines of "Let's generate the Python code, execute it and output the result.\nLet's think step-by-step."
+Ensure that the final answer is in the expected form. Do not write anything else after "Final answer:". Do not use Markdown syntax. Write the python code only after "Final answer:", not before.
+Start the response by saying something along the lines of "Let's generate the Python code, execute it and output the result.\nLet's think step-by-step.".
 
 Question: {question}
 Tables: {paragraph}
