@@ -28,7 +28,7 @@ messages = [
          "- Think step by step through the information before answering (use reasoning internally). "
          "- Answer clearly, concisely and succinctly. "
          "- Use only the data provided in the context (text extracted from the page + data tables for each company being analysed)."
-         "- If you cannot find the answer, say so clearly. "
+         "- If you cannot find the answer from the context, say so clearly. "
          "- Indicate the row, cell and name of the company you used for the answer (from the table within the text) and indicate the PAGE and NUMBER of the table (from the context) also for every extracted information"
          "- Do not explain your reasoning process; just give the final answer and required details."
      )},
@@ -146,7 +146,7 @@ def upload_and_process_files(files):
                 shell=False,
                 check=True,
                 env=env,
-                capture_output=False,
+                capture_output=True,
                 text=True
             )
 
@@ -156,7 +156,7 @@ def upload_and_process_files(files):
                 shell=False,
                 check=True,
                 env=env,
-                capture_output=False,
+                capture_output=True,
                 text=True
             )
 
@@ -195,7 +195,7 @@ def upload_and_process_files(files):
 def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list, select_pot_value):
     """
     Gestisce una domanda dell'utente con file PDF selezionati (docs_list).
-    Se `select_pot_value` è attivo, utilizza QueryAgent (Program-of-Thought); altrimenti segue il flusso classico con LLM diretto. <-------DA FINIRE
+    Se `select_pot_value` è attivo, utilizza QueryAgent (Program-of-Thought); altrimenti segue il flusso classico con LLM diretto.
     Se l'ultente vuole invece interrogare un settore, sectors_list sarà un input della funzione
     """
     user_message = chat_input_data.get("text", "").strip()
@@ -225,7 +225,7 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
             all_sector_tables = {}
 
             for sector in sectors_list:
-                print(f"🧩 Elaborazione settore: {sector}")
+                print(f"Elaborazione settore: {sector}")
                 try:
                     subprocess.run(
                         [sys.executable, "main.py", "--query", user_message, "--use_ensemble", "--sectors", sector],
@@ -330,19 +330,24 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                             print(f"DEBUG: errore durante lettura CSV {csv_file}")
 
                 if len(file_tables) > 0:
-                    all_tables[file_idx] = file_tables
+                    all_tables[file] = file_tables
 
             # Se non ha trovato nessuna tabella
             if not all_tables:
                 response = "⚠️ No tables found in the selected PDFs."
                 return chat_history + [{"role": "assistant", "content": response}]
 
-            # Prepara i testi associati (uno per ciascun blocco di tabelle)
-            texts = [
-                "Per rispondere alla domanda, considera i dati riportati nelle tabelle " +
-                " e ".join([f"<Table{i + 1}>" for i in range(len(all_tables[0]))]) +
-                " e analizza i valori principali. Non tutte le tabelle hannno i valori necessari per rispondere alla domanda",
-            ]
+            texts = []
+            for file, tables in all_tables.items():
+                text = (
+                        f"File: {file}\n"
+                        "Considera i dati riportati nelle seguenti tabelle "
+                        + " e ".join([f"<Table{i + 1}>" for i in range(len(tables))])
+                        + ". Analizza i valori principali per rispondere alla domanda."
+                )
+                texts.append(text)
+
+            # print("DEB all_tables: " + str(all_tables))
 
             try:
                 result = ag.query(user_message, all_tables, texts)
