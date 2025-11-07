@@ -188,7 +188,7 @@ class QueryAgent:
 
         return new_texts
 
-    def query(self, query: str, tables: Dict[int, List[pd.DataFrame]], texts: List[str]) -> str:
+    def query(self, query: str, tables: Dict[Union[int, str], List[pd.DataFrame]], texts: List[str]) -> str:
         """
         given a query and a list of tables, this function processes each table in this way:
         - Filtering: extraction of relevant rows and columns from each table
@@ -249,8 +249,6 @@ class QueryAgent:
 
         else:
             final_string = "🧠Program of Thought in action\n" + python_text_raw
-
-        print("final_string:\n", final_string)
 
         return final_string
 
