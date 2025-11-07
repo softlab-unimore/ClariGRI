@@ -23,6 +23,7 @@ A sample rule can be:
 First reason step-by-step. Then write "Final answer: " followed exclusively by the list of rules/formulas.
 
 Do not try to answer the question, but focus only on the given task. Ensure that the final answer is in the expected form. Do not write anything else after "Final answer:". Do not use Markdown syntax.
+Start the response by saying something along the lines of "We need to make sure that the table values, and the question, are aligned in terms of the units of measurement."
 
 Question: {question}
 Tables: {tables}
@@ -39,11 +40,11 @@ Let's think step-by-step. """
 
 prompt_total = """
 You must create the python code capable of answering the following question given the provided tables. First write your reasoning. Then, in the end, write "Final answer:" followed by the python code and nothing else. The Python code must be runnable "as it is", so make sure to include the relevant imports. At the end of the python function, print() the result.
-If the question is boolean, the output must be exclusively a 'yes' or 'no' answer. If the question asks for a list of values, you must answer with a list of values separated with a comma. Write the numerical values with exactly 2 decimal values.
-Ensure that the final answer is in the expected form. Do not write anything else after "Final answer:". Do not use Markdown syntax.
+If the question is boolean, the printed output must be exclusively a 'yes' or 'no' answer. If the question asks for a list of values, the printed output must be a list of values separated with a comma. Write the numerical values with exactly 2 decimal values.
+Ensure that the final answer is in the expected form. Do not write anything else after "Final answer:". Use Markdown syntax only for the code block.
+Start the response by saying something along the lines of "Let's generate the Python code, execute it and output the result.\nLet's think step-by-step."
 
 Question: {question}
 Tables: {paragraph}
 
-Let's think step-by-step.
 """
