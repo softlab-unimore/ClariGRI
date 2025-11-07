@@ -130,9 +130,9 @@ class QueryAgent:
         ])
 
         list_of_rules = self.remove_markdown_syntax(self.extract_result(list_of_rules_raw, "Final answer:"))
-        return list_of_rules
+        return list_of_rules, list_of_rules_raw
 
-    def table_insertion(self, texts: list[str], tables: Dict[int, List[pd.DataFrame]]) -> List[str]:
+    def table_insertion(self, texts: list[str], tables: Dict[str, List[pd.DataFrame]]) -> List[str]:
         new_texts = []
         for i, text in enumerate(texts):
             new_text = text
@@ -142,7 +142,7 @@ class QueryAgent:
 
         return new_texts
 
-    def query(self, query: str, tables: Dict[int, List[pd.DataFrame]], texts: List[str]) -> str:
+    def query(self, query: str, tables: Dict[str, List[pd.DataFrame]], texts: List[str]) -> str:
         """
         given a query and a list of tables, this function processes each table in this way:
         - Filtering: extraction of relevant rows and columns from each table
@@ -153,31 +153,44 @@ class QueryAgent:
         - Final answer: the final result is given back to the LLM, which produces a general response explaining the answer
         """
 
-        intermediate_responses = {}
-        intermediate_tables = {}
+        messages = [
+            "To answer the question, let's focus on the following tables. Interesting values are highlighted."
+        ]
+        intermediate_responses = {"extraction": {}, "normalization": {}, "PoT": {}}
+        intermediate_tables = {"extraction": {}, "normalization": {}, "PoT": {}}
         error = False
 
         # filter table
-        for key, tables in tables.items():
-            intermediate_tables[key] = []
-            intermediate_responses[key] = []
-            for table in tables:
+        for key, list_tables in tables.items():
+            intermediate_tables["extraction"][key] = []
+            intermediate_responses["extraction"][key] = []
+            for table in list_tables:
+                intermediate_tables["extraction"][key].append(table)
                 filtered_table, extract_response = self.filter_table(query, table)
                 if isinstance(filtered_table, int) and filtered_table == -1:
                     error = True
 
                 if error:
-                    intermediate_responses[key].append(-1)
-                    intermediate_tables[key].append(-1)
+                    intermediate_responses["extraction"][key].append(-1)
+                    #intermediate_tables[key].append(-1)
                 else:
-                    intermediate_responses[key].append(extract_response)
-                    intermediate_tables[key].append(filtered_table)
+                    intermediate_responses["extraction"][key].append(extract_response)
+                    #intermediate_tables[key].append(filtered_table)
+
+        table_txt = ""
+        for key, values in intermediate_tables["extraction"].items():
+            table_txt += f"Company name: {key}\n\n"
+            for value in values:
+                table_txt += value.to_html(index=False) + "\n\n"
+        table_txt = table_txt.strip()
+        messages.append("\n\n"+table_txt)
 
         # normalize table
-        list_of_rules = self.table_normalization(query, intermediate_tables)
+        list_of_rules, list_of_rules_raw = self.table_normalization(query, intermediate_tables["extraction"])
+        messages.append("\n\n# Normalization\n\n"+list_of_rules_raw)
 
         # Table insertion
-        new_texts = self.table_insertion(texts, intermediate_tables)
+        new_texts = self.table_insertion(texts, intermediate_tables["extraction"])
 
         # PoT
         prompt = prompt_total.format(question=query, paragraph="\n\n".join(new_texts) + "\n\n" + list_of_rules)
@@ -187,50 +200,14 @@ class QueryAgent:
                 "content": prompt,
             }
         ])
+        messages.append("\n\n# Program of Thought\n\n"+python_text_raw)
         python_code = self.remove_markdown_syntax(self.extract_result(python_text_raw, "Final answer:"))
         results, error = self.execute(python_code, query, '\n\n'.join(new_texts) + "\n\n" + list_of_rules)
 
         if error:
-            return results
+            return "PoT execution failed. Falling back to CoT...\n"+results
 
         # Final answer
-        results = self.remove_markdown_syntax(self.extract_result(results, "Final answer:"))
-        return results
-
-
-if __name__=='__main__':
-    ag = QueryAgent()
-
-    df1 = pd.DataFrame({
-        "index": [0, 1, 2],
-        "name": ["A", "B", "C"],
-        "value": [5, 15, 25]
-    })
-
-    df2 = pd.DataFrame({
-        "index": [0, 1, 2],
-        "name": ["X", "Y", "Z"],
-        "value": [7, 12, 30]
-    })
-
-    df3 = pd.DataFrame({
-        "index": [0, 1, 2],
-        "name": ["E", "F", "G"],
-        "value": [5, 15, 25]
-    })
-
-    tables = {
-        0: [df1, df2],
-        1: [df3]
-    }
-
-    texts = [
-        "Per rispondere alla domanda, considera i dati riportati nelle tabelle " +
-        " e ".join([f"<Table{i + 1}>" for i in range(len(tables[0]))]) +
-        " e analizza i valori principali.",
-
-        "Infine, fai riferimento alla tabella " + "<Table1>" + " per completare l'analisi."
-    ]
-
-    result = ag.query("Select rows with value > 10", tables, texts)
-    print(result)
+        #results = self.remove_markdown_syntax(self.extract_result(results, "Final answer:"))
+        messages.append("\n\nFinal response: "+results)
+        return "".join(messages)
