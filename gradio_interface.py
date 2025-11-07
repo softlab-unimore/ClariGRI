@@ -248,43 +248,51 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                              "content": f"⚠️ Nessun riferimento trovato per query '{user_message}' nel settore '{sector}'"}]
 
                 refs = metadata[user_message]  # lista di dict con source e pagine
-                sector_tables = []
+                sector_sources = {}  # <--- qui inizia il nuovo dizionario per sorgenti
 
                 for source_entry in refs:
                     src_name = source_entry.get("source")
-                    for page_entry in source_entry.get("pages", []):
-                        page = page_entry.get("page_n")
-                        csv_files = page_entry.get("csv_files", [])
+                    source_tables = []  # <--- lista di tabelle per questa sorgente
 
+                    for page_entry in source_entry.get("pages", []):
+                        csv_files = page_entry.get("csv_files", [])
                         for csv_filename in csv_files:
                             csv_path = os.path.join("table_dataset", src_name, csv_filename)
                             if os.path.exists(csv_path):
                                 try:
                                     df = pd.read_csv(csv_path, sep=";")
-                                    sector_tables.append(df)
+                                    source_tables.append(df)
                                 except Exception:
                                     print(f"DEBUG: errore lettura CSV {csv_path}")
 
-                if len(sector_tables) > 0:
-                    all_sector_tables[sector] = sector_tables
+                    if source_tables:
+                        sector_sources[src_name] = source_tables  # aggiungi le tabelle per la sorgente
 
+                if sector_sources:
+                    all_sector_tables[sector] = sector_sources  # aggiungi al settore
+
+            # Controllo se vuoto
             if not all_sector_tables:
                 response = "⚠️ Nessuna tabella trovata nei settori selezionati."
                 return chat_history + [{"role": "assistant", "content": response}]
 
             # Costruisci i testi per PoT
             texts = []
-            for sector, tables in all_sector_tables.items():
+            for sector, sources in all_sector_tables.items():
+                source_names = list(sources.keys())
                 text = (
                         f"Settore: {sector}\n"
-                        "Considera i dati riportati nelle seguenti tabelle "
-                        + " e ".join([f"<Table{i + 1}>" for i in range(len(tables))])
+                        f"Sono stati analizzati i seguenti report: {', '.join(source_names)}.\n"
+                        "Considera i dati riportati nelle seguenti tabelle: "
+                        + " e ".join([f"<Table{i + 1}>" for i in range(sum(len(t) for t in sources.values()))])
                         + ". Analizza i valori principali per rispondere alla domanda."
                 )
                 texts.append(text)
 
+            # print("DEB all_sector_tables: " + str(all_sector_tables))
+
             try:
-                result = ag.query(user_message, all_sector_tables, texts)
+                result, intermediate_filtered_idx = ag.query_sectors(user_message, all_sector_tables, texts)
             except Exception as e:
                 result = f"⚠️ Errore durante QueryAgent nei settori: {e}"
 
@@ -350,7 +358,9 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
             # print("DEB all_tables: " + str(all_tables))
 
             try:
-                result = ag.query(user_message, all_tables, texts)
+                result, intermediate_filtered_idx = ag.query(user_message, all_tables, texts)
+                print("DEB results: " + str(result))
+                print("DEB intermediate results: " + str(intermediate_filtered_idx))
             except Exception as e:
                 result = f"⚠️ Error during QueryAgent execution: {e}"
 
@@ -386,7 +396,7 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                     continue
 
                 refs = metadata[user_message]  # lista di dict: [{"source": ..., "pages": [...]}, ...]
-                print("refs",refs)
+                print("refs", refs)
                 combined_text = ""
                 seen_pages = set()
 
@@ -429,7 +439,6 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
 
                 header = f"Sector: {sector}\n"
                 context += f"{header}\n{combined_text}\n---\n"
-
 
         else:
 
@@ -490,8 +499,6 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
 
                 header = f"Company name: {file}\n"
                 context += f"{header}\n{combined_text}\n---\n"
-
-
 
         if settori:
             message = [
