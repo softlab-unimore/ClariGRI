@@ -119,9 +119,10 @@ class QueryAgent:
 
     def table_normalization(self, query: str, intermediate_tables: dict[str, list[pd.DataFrame]]) -> str:
         html_tables = []
-        for key, tables in intermediate_tables.items():
-            for table in tables:
-                html_tables.append(table.to_html(index=False))
+        for sector_key in intermediate_tables.keys():
+            for key, tables in intermediate_tables[sector_key].items():
+                for table in tables:
+                    html_tables.append(table.to_html(index=False))
 
         prompt_text = "\n\n".join(html_tables)
         prompt = prompt_normalization.format(question=query, tables=prompt_text)
@@ -147,21 +148,24 @@ class QueryAgent:
         # Normalizza tables in una lista la cui i-esima entry corrisponde al texts[i]
         # Caso 1: chiavi numeriche contigue 0..n-1
         try:
-            numeric_keys = all(isinstance(k, int) for k in tables.keys())
+            numeric_keys = False not in [all(isinstance(k, int) for k in tables[section_key].keys()) for section_key in tables.keys()]
         except Exception:
             numeric_keys = False
 
+        keys_sorted = sorted([subkey for subdict in tables.values() for subkey in subdict.keys()])
+        dict_wo_subdicts = {subkey:subvalue for subdict in tables.values() for subkey, subvalue in subdict.items()}
+
         if numeric_keys:
             # Verifica che le chiavi siano contigue a partire da 0
-            keys_sorted = sorted(tables.keys())
             if keys_sorted == list(range(len(keys_sorted))):
-                tables_list = [tables[i] for i in range(len(keys_sorted))]
+                tables_list = [dict_wo_subdicts[i] for i in range(len(keys_sorted))]
             else:
                 # Non contigue: trasformiamo comunque in lista ordinata per chiave crescente
-                tables_list = [tables[k] for k in keys_sorted]
+                tables_list = [dict_wo_subdicts[k] for k in keys_sorted]
         else:
             # Chiavi non numeriche: usa ordine di inserimento / values()
-            tables_list = list(tables.values())
+            tables_list = list(dict_wo_subdicts.values())
+
 
         new_texts = []
         n = min(len(texts), len(tables_list))
@@ -201,6 +205,14 @@ class QueryAgent:
         - Final answer: the final result is given back to the LLM, which produces a general response explaining the answer
         """
 
+        if all(isinstance(v, list) for v in tables.values()):
+            sector_question = False
+            tmp_dict = {}
+            tmp_dict["fake_sector"] = tables
+            tables = tmp_dict
+        else:
+            sector_question = True
+
         messages = [
             "To answer the question, let's focus on the following tables. Interesting values are highlighted."
         ]
@@ -209,29 +221,35 @@ class QueryAgent:
         error = False
 
         # filter table
-        for key, list_tables in tables.items():
-            intermediate_tables[key] = []
-            intermediate_filtered_idx[key] = []
-            for table in list_tables:
-                intermediate_tables[key].append(table)
-                filtered_table, extract_response = self.filter_table(query, table)
-                if isinstance(filtered_table, int) and filtered_table == -1:
-                    error_extraction = True
-                else:
-                    error_extraction = False
+        for sector_key in tables.keys():
+            intermediate_tables[sector_key] = {}
+            intermediate_filtered_idx[sector_key] = {}
+            for key, list_tables in tables[sector_key].items():
+                intermediate_tables[sector_key][key] = []
+                intermediate_filtered_idx[sector_key][key] = []
+                for table in list_tables:
+                    intermediate_tables[sector_key][key].append(table)
+                    filtered_table, extract_response = self.filter_table(query, table)
+                    if isinstance(filtered_table, int) and filtered_table == -1:
+                        error_extraction = True
+                    else:
+                        error_extraction = False
 
-                if error_extraction:
-                    intermediate_filtered_idx[key].append(-1)
-                    #intermediate_tables[key].append(-1)
-                else:
-                    intermediate_filtered_idx[key].append(extract_response)
-                    #intermediate_tables[key].append(filtered_table)
+                    if error_extraction:
+                        intermediate_filtered_idx[sector_key][key].append(-1)
+                        #intermediate_tables[key].append(-1)
+                    else:
+                        intermediate_filtered_idx[sector_key][key].append(extract_response)
+                        #intermediate_tables[key].append(filtered_table)
 
         table_txt = ""
-        for key, values in intermediate_tables.items():
-            table_txt += f"Company name: {key}\n\n"
-            for value in values:
-                table_txt += value.to_html(index=False) + "\n\n"
+        for sector_key in intermediate_tables.keys():
+            if sector_question:
+                table_txt += f"The company below are inside the following sector: {sector_key}\n\n"
+            for key, values in intermediate_tables[sector_key].items():
+                table_txt += f"Company name: {key}\n\n"
+                for value in values:
+                    table_txt += value.to_html(index=False) + "\n\n"
         table_txt = table_txt.strip()
         messages.append("\n\n"+table_txt)
 
