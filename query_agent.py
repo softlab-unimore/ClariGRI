@@ -6,6 +6,7 @@ import io
 import re
 import contextlib
 
+
 class QueryAgent:
     def __init__(self):
         pass
@@ -29,16 +30,13 @@ class QueryAgent:
         text = text.replace("python", "")
         return text.strip()
 
-    def extract_result(self, text: str, pattern: str, opposite=False) -> str:
+    def extract_result(self, text: str, pattern: str) -> str:
         position = text.lower().rfind(pattern.lower())
         if position == -1:
             print(f"Cannot find pattern '{pattern}' in '{text}'. Defaulting to '{text}'...")
             return text
         else:
             position += len(pattern)
-
-        if opposite:
-            return text[:position].strip()
         return text[position:].strip()
 
     def filter_table(self, query: str, table: pd.DataFrame) -> Union[tuple[pd.DataFrame, str], tuple[int, str]]:
@@ -71,9 +69,9 @@ class QueryAgent:
             return -1, response
 
         table.columns = table.columns.astype(str)
-        columns = [el for i,el in enumerate(table.iloc[0,:]) if i in rows_columns_extracted["columns"]]
+        columns = [el for i, el in enumerate(table.iloc[0, :]) if i in rows_columns_extracted["columns"]]
 
-        table = table[table["0"].isin(rows_columns_extracted["rows"])] # table["0"] is "index"
+        table = table[table["0"].isin(rows_columns_extracted["rows"])]# table["0"] is "index"
         table = table[[str(el) for el in rows_columns_extracted["columns"]]]
 
         # clean
@@ -268,7 +266,7 @@ class QueryAgent:
                 "content": prompt,
             }
         ])
-        messages.append("\n\n# 🧠 Program of Thought\n\n"+self.remove_markdown_syntax(self.extract_result(python_text_raw, "Final answer:", opposite=True))+"\n"+self.extract_result(python_text_raw, "Final answer:"))
+        messages.append("\n\n# 🧠 Program of Thought\n\n"+python_text_raw)
         python_code = self.remove_markdown_syntax(self.extract_result(python_text_raw, "Final answer:"))
         results, error = self.execute(python_code, query, '\n\n'.join(new_texts) + "\n\n" + list_of_rules)
 
@@ -279,3 +277,6 @@ class QueryAgent:
         #results = self.remove_markdown_syntax(self.extract_result(results, "Final answer:"))
         messages.append("\n\nFinal response: "+results)
         return "".join(messages), intermediate_filtered_idx
+
+    def query_sectors(self, query: str, tables: Dict[str, Dict[str, List[pd.DataFrame]]], texts: List[str]) -> str:
+        return "ok mprova", "ok prova"
