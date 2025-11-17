@@ -6,9 +6,9 @@ HEADERS = {"Accept": "application/sparql-results+json"}
 
 def extract_company_sector(company_name):
     """
-    Dato il nome di un'azienda, cerca il suo settore/industry su Wikidata
-    usando la API di EntitySearch.
-    Restituisce una lista di industrie trovate.
+    Given the name of a company, search for its sector/industry on Wikidata
+    using the EntitySearch API.
+    Returns a list of industries found.
     """
     # Costruisci la query SPARQL dinamicamente
     sparql = f"""
@@ -45,10 +45,3 @@ def extract_company_sector(company_name):
     # Rimuove duplicati
     return list(set(industries))
 
-'''
-# --- Esempio di utilizzo ---
-if __name__ == "__main__":
-    company = "Eni"
-    sectors = extract_company_sector(company)
-    print(f"{company} : {', '.join(sectors) if sectors else 'Nessun settore trovato'}")
-'''
