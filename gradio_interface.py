@@ -1,4 +1,4 @@
-import gradio as gr  # version 5.45
+import gradio as gr
 import os
 import json
 import subprocess
@@ -12,13 +12,11 @@ import gradio_actions
 import markdown2
 from gradio_toggle import Toggle
 import re
-from query_agent import QueryAgent  # importa la tua classe
+from query_agent import QueryAgent
+from pathlib import Path
 
 server_host = "155.185.48.176"  # se lavoro sul server unimore, sennò server_host = 'localhost'
 
-# **********************************
-# Messaggi template per LLM
-# **********************************
 messages = [
     {"role": "system",
      "content": (
@@ -76,7 +74,7 @@ def clear_all():
     return None
 
 
-def load_companies_with_summary(companies_name, base_path="./table_dataset"):
+def load_companies_with_summary(companies_name, base_path=Path("./table_dataset")):
     companies_data = {}
 
     for name in companies_name:
@@ -93,8 +91,8 @@ def load_companies_with_summary(companies_name, base_path="./table_dataset"):
 
 def upload_and_process_files(files):
     """
-    Funzione che riceve una lista di file PDF, esegue le chiamate a main.py e restituisce un testo sui valori GRI trovati.
-    Ora estrae anche il nome della compagnia e aggiorna i nomi dei PDF.
+    Function that receives a list of PDF files, executes calls to main.py, and returns text on the GRI values found.
+    It now also extracts the company name and updates the PDF names.
     """
     csv_group.visible = False
     if not files:
@@ -111,26 +109,23 @@ def upload_and_process_files(files):
 
     for file in files:
 
-        orig_filepath = file.name  # percorso locale originale
+        orig_filepath = file.name  # original local path
         orig_filename = os.path.basename(orig_filepath)
 
-        # --- Estrai il nome della company dalla copia temporanea ---
         pdf_path_tmp = os.path.join("reports", orig_filename)
-        shutil.copy(orig_filepath, pdf_path_tmp)  # copia sul server
+        shutil.copy(orig_filepath, pdf_path_tmp)  # server copy
 
         company_name = llm.get_company_name(pdf_path_tmp)
         company_name_clean = re.sub(r'[^\w_-]', '_', company_name.strip()) if company_name else "UNKNOWN"
 
-        # Nuovo nome file
+        # new file name
         pdf_basename_orig = os.path.splitext(orig_filename)[0]
         pdf_basename = f"{pdf_basename_orig}-{company_name_clean}"
         pdf_name_server = os.path.abspath(os.path.join("reports", f"{pdf_basename}.pdf"))
-
-        # Rinomina la copia sul server
         os.rename(pdf_path_tmp, pdf_name_server)
 
         try:
-            # 1. Denso
+            # 1. Dense
             subprocess.run(
                 [sys.executable, "main.py", "--pdf", pdf_name_server, "--embed", "--use_dense"],
                 shell=False,
@@ -140,7 +135,7 @@ def upload_and_process_files(files):
                 text=True
             )
 
-            # 2. Sparso
+            # 2. Sparse
             subprocess.run(
                 [sys.executable, "main.py", "--pdf", pdf_name_server, "--embed", "--use_sparse"],
                 shell=False,
@@ -150,7 +145,7 @@ def upload_and_process_files(files):
                 text=True
             )
 
-            # 3. Ensemble con query
+            # 3. Ensemble with query
             subprocess.run(
                 [sys.executable, "main.py", "--pdf", pdf_name_server, "--load_query_from_file", json_file_query, "--use_ensemble"],
                 shell=False,
@@ -168,17 +163,17 @@ def upload_and_process_files(files):
             continue
 
         new_metadata_path = os.path.join("table_dataset", pdf_basename, "metadata_after_llm.json")
-        # Leggo il metadata_after_llm.json
+
         with open(new_metadata_path, "r", encoding="utf-8") as f:
             metadata = json.load(f)
 
         output_lines = [f"📁**{pdf_basename_orig}** -- company name **{company_name}** \n "]
 
-        for gri_code, description in islice(data.items(), 2, 17):  # dal 2 all' 17 GRI
+        for gri_code, description in islice(data.items(), 2, 17):  # from 2 to 17 (GRI)
             if gri_code in metadata:
                 gri_line = f"   🔹**GRI {gri_code}**: {description}  "
                 output_lines.append(gri_line)
-                seen = set()  # per evitare duplicati precisi (pagina, other_num)
+                seen = set()
                 for page, other_num in metadata[gri_code]:
                     key = (page, other_num)
                     if key not in seen:
@@ -194,9 +189,9 @@ def upload_and_process_files(files):
 
 def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list, select_pot_value):
     """
-    Gestisce una domanda dell'utente con file PDF selezionati (docs_list).
-    Se `select_pot_value` è attivo, utilizza QueryAgent (Program-of-Thought); altrimenti segue il flusso classico con LLM diretto.
-    Se l'ultente vuole invece interrogare un settore, sectors_list sarà un input della funzione
+    Handles a user query with selected PDF files (docs_list).
+    If `select_pot_value` is active, it uses QueryAgent (Program-of-Thought); otherwise, it follows the classic flow with direct LLM.
+    If the user wants to query a sector instead, sectors_list will be an input to the function.
     """
     user_message = chat_input_data.get("text", "").strip()
 
@@ -211,21 +206,20 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
     env = os.environ.copy()
     env["PYTHONHASHSEED"] = "0"
 
-    settori = False
+    sectors = False
     if len(sectors_list) > 0:
-        settori = True
-        print("SETTORI SELEZIONATI: " + str(sectors_list))
+        sectors = True
 
-    # === CASO 1: Program of Thought attivo ===
+    # === CASE 1: Program of Thought ===
     if select_pot_value:
 
-        # === CASO 1A: PoT + SETTORI ===
-        if settori:
+        # === CASE 1A: PoT + sectors ===
+        if sectors:
             ag = QueryAgent()
             all_sector_tables = {}
 
             for sector in sectors_list:
-                print(f"Elaborazione settore: {sector}")
+                print(f"Sector processing: {sector}")
                 try:
                     subprocess.run(
                         [sys.executable, "main.py", "--query", user_message, "--use_ensemble", "--sectors", sector],
@@ -233,26 +227,26 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                     )
                 except subprocess.CalledProcessError as e:
                     return [{"role": "assistant",
-                             "content": f"⚠️ Errore durante il PoT per settore '{sector}':\n{e.stderr}"}]
+                             "content": f"⚠️ Error during PoT for sector '{sector}':\n{e.stderr}"}]
 
                 # Percorso dei metadata del settore
                 metadata_path = os.path.join("sectors", sector, "verbal_questions_metadata.json")
                 if not os.path.exists(metadata_path):
-                    return [{"role": "assistant", "content": f"⚠️ Nessun metadata trovato per settore '{sector}'"}]
+                    return [{"role": "assistant", "content": f"⚠️ No metadata found for sector '{sector}'"}]
 
                 with open(metadata_path, "r", encoding="utf-8") as f:
                     metadata = json.load(f)
 
                 if user_message not in metadata:
                     return [{"role": "assistant",
-                             "content": f"⚠️ Nessun riferimento trovato per query '{user_message}' nel settore '{sector}'"}]
+                             "content": f"⚠️ No reference found for query “{user_message}” in sector '{sector}'"}]
 
-                refs = metadata[user_message]  # lista di dict con source e pagine
-                sector_sources = {}  # <--- qui inizia il nuovo dizionario per sorgenti
+                refs = metadata[user_message]  # list of dict with source and pages
+                sector_sources = {}  # here begins the new dictionary for sources
 
                 for source_entry in refs:
                     src_name = source_entry.get("source")
-                    source_tables = []  # <--- lista di tabelle per questa sorgente
+                    source_tables = [] # list of tables for this source
 
                     for page_entry in source_entry.get("pages", []):
                         csv_files = page_entry.get("csv_files", [])
@@ -263,41 +257,38 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                                     df = pd.read_csv(csv_path, sep=";")
                                     source_tables.append(df)
                                 except Exception:
-                                    print(f"DEBUG: errore lettura CSV {csv_path}")
+                                    print(f"DEBUG: CSV reading error {csv_path}")
 
                     if source_tables:
-                        sector_sources[src_name] = source_tables  # aggiungi le tabelle per la sorgente
-
+                        sector_sources[src_name] = source_tables  # add tables for the source
                 if sector_sources:
-                    all_sector_tables[sector] = sector_sources  # aggiungi al settore
+                    all_sector_tables[sector] = sector_sources  # add to sector
 
-            # Controllo se vuoto
             if not all_sector_tables:
-                response = "⚠️ Nessuna tabella trovata nei settori selezionati."
+                response = "⚠️ No tables found in the selected sectors."
                 return chat_history + [{"role": "assistant", "content": response}]
 
-            # Costruisci i testi per PoT
+            # Build texts for PoT
             texts = []
             for sector, sources in all_sector_tables.items():
                 source_names = list(sources.keys())
                 text = (
-                        f"Settore: {sector}\n"
-                        f"Sono stati analizzati i seguenti report: {', '.join(source_names)}.\n"
-                        "Considera i dati riportati nelle seguenti tabelle: "
+                        f"Sector: {sector}\n"
+                        f"The following reports were analysed: {', '.join(source_names)}.\n"
+                        "Consider the data shown in the following tables: "
                         + " e ".join([f"<Table{i + 1}>" for i in range(sum(len(t) for t in sources.values()))])
-                        + ". Analizza i valori principali per rispondere alla domanda."
+                        + ". Analyse the main values to answer the question."
                 )
                 texts.append(text)
 
-            # print("DEB all_sector_tables: " + str(all_sector_tables))
-
             try:
-                result, intermediate_filtered_idx = ag.query_sectors(user_message, all_sector_tables, texts)
+                result, intermediate_filtered_idx = ag.query(user_message, all_sector_tables, texts)
             except Exception as e:
-                result = f"⚠️ Errore durante QueryAgent nei settori: {e}"
+                result = f"⚠️ Error during QueryAgent in sectors: {e}"
 
             return chat_history + [{"role": "assistant", "content": result}]
 
+        # === CASE 1B: PoT ===
         else:
             ag = QueryAgent()
             all_tables = {}
@@ -322,25 +313,22 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                     metadata = json.load(f)
 
                 file_tables = []
-                # folder_path = os.path.join("table_dataset", file)
-
                 refs = metadata[user_message]
 
                 for page, num in refs:
 
-                    # Cerca i CSV della cartella
+                    # Search for CSV files in the folder
                     csv_file = os.path.join("table_dataset", file, f"{page}_{num}.csv")
                     if os.path.exists(csv_file):
                         try:
                             df = pd.read_csv(csv_file, sep=";")
                             file_tables.append(df)
                         except Exception:
-                            print(f"DEBUG: errore durante lettura CSV {csv_file}")
+                            print(f"DEBUG: Error during CSV reading {csv_file}")
 
                 if len(file_tables) > 0:
                     all_tables[file] = file_tables
 
-            # Se non ha trovato nessuna tabella
             if not all_tables:
                 response = "⚠️ No tables found in the selected PDFs."
                 return chat_history + [{"role": "assistant", "content": response}]
@@ -349,29 +337,24 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
             for file, tables in all_tables.items():
                 text = (
                         f"File: {file}\n"
-                        "Considera i dati riportati nelle seguenti tabelle "
+                        "Consider the data shown in the following tables"
                         + " e ".join([f"<Table{i + 1}>" for i in range(len(tables))])
-                        + ". Analizza i valori principali per rispondere alla domanda."
+                        + ". Analyse the main values to answer the question."
                 )
                 texts.append(text)
 
-            # print("DEB all_tables: " + str(all_tables))
-
             try:
                 result, intermediate_filtered_idx = ag.query(user_message, all_tables, texts)
-                print("DEB results: " + str(result))
-                print("DEB intermediate results: " + str(intermediate_filtered_idx))
             except Exception as e:
                 result = f"⚠️ Error during QueryAgent execution: {e}"
 
             return chat_history + [{"role": "assistant", "content": result}]
 
-    # === CASO 2: flusso standard ===
+    # === CASE 2: CoT ===
     else:
         context = ""
-
-        if settori:
-            print("dentro il ciclo")
+        # === CASE 2A: CoT + sectors ===
+        if sectors:
             try:
                 subprocess.run(
                     [sys.executable, "main.py", "--query", user_message, "--use_ensemble", "--sectors"] + sectors_list,
@@ -380,23 +363,22 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
             except subprocess.CalledProcessError as e:
                 return [{"role": "assistant", "content": f"⚠️ Error during processing:\n{e.stderr}"}]
 
-            # Itera sui settori
+            # Itera sui sectors
             for sector in sectors_list:
                 sector_dir = os.path.join("sectors", sector)
                 metadata_path = os.path.join(sector_dir, "verbal_questions_metadata.json")
                 if not os.path.exists(metadata_path):
-                    context += f"⚠️ Nessun metadata trovato per il settore '{sector}'\n"
+                    context += f"⚠️No metadata found for the sector '{sector}'\n"
                     continue
 
                 with open(metadata_path, "r", encoding="utf-8") as f:
                     metadata = json.load(f)
 
                 if user_message not in metadata:
-                    context += f"⚠️ Nessun riferimento trovato per la query '{user_message}' in settore '{sector}'\n"
+                    context += f"⚠️  No reference found for query “{user_message}” in sector '{sector}'\n"
                     continue
 
-                refs = metadata[user_message]  # lista di dict: [{"source": ..., "pages": [...]}, ...]
-                print("refs", refs)
+                refs = metadata[user_message]  # list of dicts: [{"source": ..., "pages": [...]}, ...]
                 combined_text = ""
                 seen_pages = set()
 
@@ -417,7 +399,7 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                         with open(txt_path, "r", encoding="utf-8") as f:
                             txt_content = f.read()
 
-                        # Rimpiazza placeholder CSV
+                        # Replace CSV placeholder
                         placeholders = re.findall(r'\[TABLEPLACEHOLDER\s*(\d+)]', txt_content)
                         for placeholder_num in placeholders:
                             csv_file = os.path.join("table_dataset", src_name, f"{page}_{placeholder_num}.csv")
@@ -427,7 +409,7 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                                     table_str = f"\n[Table from {src_name} - page {page}, num {placeholder_num}]\n" + df.to_csv(
                                         index=False)
                                 except Exception:
-                                    print(f"DEBUG: errore durante lettura CSV {csv_file}")
+                                    print(f"DEBUG: error while reading CSV {csv_file}")
                                     table_str = ""
                             else:
                                 table_str = ""
@@ -440,6 +422,7 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                 header = f"Sector: {sector}\n"
                 context += f"{header}\n{combined_text}\n---\n"
 
+        # === CASE 2B: CoT ===
         else:
 
             for file in docs_list:
@@ -488,7 +471,7 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                                     table_str = f"\n[Table from page {page}, num {placeholder_num}]\n" + df.to_csv(
                                         index=False)
                                 except Exception:
-                                    print(f"DEBUG: errore durante lettura CSV {csv_file}")
+                                    print(f"DEBUG: error while reading CSV {csv_file}")
                                     table_str = ""
                             else:
                                 table_str = ""
@@ -500,7 +483,7 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
                 header = f"Company name: {file}\n"
                 context += f"{header}\n{combined_text}\n---\n"
 
-        if settori:
+        if sectors:
             message = [
                 messages_sectors[0],  # system
                 {
@@ -527,7 +510,7 @@ def handle_chat_with_pdf(chat_history, chat_input_data, docs_list, sectors_list,
 
 
 def make_card_html(company_name, summary_text):
-    # markdown2 produce HTML; lo inseriamo dentro il contenitore .card-content
+
     return f"""
     <div class="card">
         <div class="card-header">{company_name}</div>
@@ -539,7 +522,6 @@ def make_card_html(company_name, summary_text):
 
 
 def add_cards(files):
-    """Aggiunge le card relative ai file appena caricati e ricarica la vista dalle risorse sul disco/DB."""
     return render_cards()
 
 
@@ -553,7 +535,6 @@ def render_cards_from_dict(companies_dict):
 
 
 def render_cards():
-    # Rilegge la lista attuale di documenti dalla sorgente DB
     companies = gradio_actions.get_docs_from_db()
     companies_dict = load_companies_with_summary(companies)
     return render_cards_from_dict(companies_dict)
@@ -565,7 +546,6 @@ with gr.Blocks() as chatbot_ui:
     )
 
     with gr.Row():
-        # Colonna sinistra → Chat
         with gr.Column(scale=3):
             chatbot = gr.Chatbot(
                 elem_id="chatbot",
@@ -586,7 +566,6 @@ with gr.Blocks() as chatbot_ui:
                 sources="microphone",
             )
 
-        # Colonna destra
         with gr.Column(scale=1):
             with gr.Row():
                 docs_list = gr.CheckboxGroup(
@@ -607,25 +586,23 @@ with gr.Blocks() as chatbot_ui:
 
                 )
 
-            # Mutual exclusion logic between docs_list and sectors_list ---
+            # Mutual exclusion logic between docs_list and sectors_list
 
             def handle_docs_change(selected_docs):
-                """Se ci sono documenti selezionati, disabilita sectors_list."""
+                # If there are selected documents, disable sectors_list
                 if selected_docs:
-                    return gr.update(interactive=False)  # disabilita
+                    return gr.update(interactive=False)
                 else:
-                    return gr.update(interactive=True)  # riabilita se nessun doc selezionato
+                    return gr.update(interactive=True)
 
 
             def handle_sectors_change(selected_sectors):
-                """Se ci sono settori selezionati, disabilita docs_list."""
+                # If there are selected sectors, disable docs_list
                 if selected_sectors:
-                    return gr.update(interactive=False)  # disabilita
+                    return gr.update(interactive=False)
                 else:
-                    return gr.update(interactive=True)  # riabilita se nessun settore selezionato
+                    return gr.update(interactive=True)
 
-
-            # Collega gli eventi di cambio
             docs_list.change(handle_docs_change, inputs=docs_list, outputs=sectors_list)
             sectors_list.change(handle_sectors_change, inputs=sectors_list, outputs=docs_list)
 
@@ -646,112 +623,90 @@ with gr.Blocks() as chatbot_ui:
         return {"text": ""}
 
 
-    # Disabilita le checkbox quando l'utente invia
-
     def disable_docs():
         return gr.update(interactive=False)
 
 
-    # Riabilita le checkbox quando il bot ha finito
-
     def enable_docs():
         return gr.update(interactive=True)
 
-    # Disabilita le checkbox-sectors quando l'utente invia
 
     def disable_sectors():
         return gr.update(interactive=False)
 
-    # Riabilita le checkbox-sectors quando il bot ha finito
 
     def enable_sectors():
         return gr.update(interactive=True)
 
 
-    # Disabilita il textbox quando l'utente invia
-
     def disable_textbox():
         return gr.update(interactive=False)
 
-
-    # Disabilita il toggle quando l'utente invia
 
     def disable_toggle():
         return gr.update(interactive=False)
 
 
-    # Riabilita il textbox quando il bot ha finito
-
     def enable_textbox():
         return gr.update(interactive=True)
 
-
-    # Riabilita il toggle quando il bot ha finito
 
     def enable_toggle():
         return gr.update(interactive=True)
 
 
-    # Invia messaggio utente
     chat_msg = chat_input.submit(
         llm.add_user_message,
         inputs=[chatbot, chat_input],
         outputs=[chatbot, chat_input, chat_input]
     )
 
-    # Subito dopo l’invio → disabilita docs_list
     chat_msg.then(
         disable_docs,
         outputs=[docs_list]
     )
-    # Subito dopo l’invio → disabilita sectors_list
+
     chat_msg.then(
         disable_sectors,
         outputs=[sectors_list]
     )
-    # Subito dopo l’invio → disabilita textbox
+
     chat_msg.then(
         disable_textbox,
         outputs=[chat_input]
     )
 
-    # Subito dopo l’invio → disabilita toggle
     chat_msg.then(
         disable_toggle,
         outputs=[select_pot]
     )
 
-    # Bot risponde usando anche la selezione dei documenti
     bot_msg = chat_msg.then(
         handle_chat_with_pdf,
         inputs=[chatbot, chat_input, docs_list, sectors_list, select_pot],
         outputs=[chatbot]
     )
 
-    # Riabilita le checkbox quando il bot ha finito
     bot_msg.then(
         enable_docs,
         outputs=[docs_list]
     )
-    # Riabilita le checkbox-sectors quando il bot ha finito
+
     bot_msg.then(
         enable_sectors,
         outputs=[sectors_list]
     )
 
-    # Riabilita il textbox quando il bot ha finito
     bot_msg.then(
         enable_textbox,
         outputs=[chat_input]
     )
 
-    # Riabilita il toggle quando il bot ha finito
     bot_msg.then(
         enable_toggle,
         outputs=[select_pot]
     )
 
-    # Pulizia textbox
     chat_msg.then(
         clear_textbox,
         outputs=[chat_input]
@@ -769,9 +724,9 @@ with gr.Blocks() as process_file_ui:
         "<h2 style='text-align: center; font-size: 40px;'>GRI-QA Extraction of GRI Information</h2>"
     )
     with gr.Row():
-        # Colonna sinistra (1/3)
+
         with gr.Column(scale=1):
-            # Caricamento PDF
+
             pdf_input = gr.File(
                 label="Carica PDF",
                 file_types=[".pdf"],
@@ -783,7 +738,6 @@ with gr.Blocks() as process_file_ui:
                 clear_button = gr.Button(value="Clear")
                 upload_button = gr.Button(value="Submit", variant='primary')
 
-            # Output sotto il caricamento
             output_box = gr.Markdown(
                 label="Output",
                 height=300,
@@ -792,29 +746,25 @@ with gr.Blocks() as process_file_ui:
                 elem_id='output_box'
             )
 
-        # Colonna destra (2/3)
         with gr.Column(scale=2):
             with gr.Group(visible=True) as csv_group:
-                # Dropdown inizialmente vuoti
-                pdf_dropdown = gr.Dropdown(choices=[], value=None, label="🗂️ Seleziona cartella")
-                csv_dropdown = gr.Dropdown(choices=[], value=None, label="📄 Seleziona file CSV")
+                pdf_dropdown = gr.Dropdown(choices=[], value=None, label="🗂️ Select folder")
+                csv_dropdown = gr.Dropdown(choices=[], value=None, label="📄 Select CSV file")
 
                 dataframe = gr.Dataframe(visible=False, interactive=True, value=pd.DataFrame(), max_height=280,
-                                         wrap=True, show_copy_button=True, show_search='search', label="Contenuto CSV")
+                                         wrap=True, show_copy_button=True, show_search='search', label="CSV content")
                 log_output = gr.Textbox(label="Output", interactive=False, autoscroll=False)
 
             with gr.Row():
-                gr.HTML("")  # spazio vuoto a sinistra
-                save_button = gr.Button(value="Salva modifiche", variant='primary')
-                gr.HTML("")  # spazio vuoto a destra
+                gr.HTML("")
+                save_button = gr.Button(value="Save changes", variant='primary')
+                gr.HTML("")
 
-            # Aggiornamento dinamico delle scelte
             pdf_dropdown.change(gradio_actions.list_csv_files, inputs=pdf_dropdown, outputs=csv_dropdown)
             csv_dropdown.change(gradio_actions.load_csv, inputs=[pdf_dropdown, csv_dropdown], outputs=dataframe)
             save_button.click(gradio_actions.save_csv, inputs=[pdf_dropdown, csv_dropdown, dataframe],
                               outputs=log_output)
 
-    # Eventi
     upload_button.click(
         fn=upload_and_process_files,
         inputs=pdf_input,
@@ -844,10 +794,10 @@ with gr.Blocks() as process_file_ui:
     )
 
 if __name__ == "__main__":
-    # Imposta la cartella da servire
+    # Set the folder to serve
     pdf_dir = os.path.join(os.getcwd(), "reports")
 
-    # Avvia un server HTTP in background sulla cartella reports sulla porta 8080
+    # Start an HTTP server in the background on the reports folder on port 8080.
     subprocess.Popen(
         ["python", "-m", "http.server", "8080"],
         cwd=pdf_dir,
@@ -865,15 +815,13 @@ if __name__ == "__main__":
             [chatbot_ui, process_file_ui, company_cards],
             ["Chatbot", "Process File", "Company Card"],
         )
-        # Rigenera cards al caricamento
+
         demo.load(concurrency_limit=None, fn=render_cards, inputs=[], outputs=[cards_container])
-        # Rigenera dropdown PDF al caricamento
+
         demo.load(concurrency_limit=None, fn=gradio_actions.refresh_pdf_folders, inputs=[], outputs=[pdf_dropdown])
-        # Rigenera la checkbox nel chatbot
+
         demo.load(concurrency_limit=None, fn=gradio_actions.refresh_docs_list, inputs=[], outputs=[docs_list])
-        # Rigenera la checkbox-sectors nel chatbot
+
         demo.load(concurrency_limit=None, fn=gradio_actions.refresh_sectors_list, inputs=[], outputs=[sectors_list])
-        # Ricarica chat e toggle salvati al caricamento della pagina
-        # demo.load(concurrency_limit=None, fn=load_chat_and_toggle, inputs=[], outputs=[chatbot, select_pot])
 
     demo.launch()
