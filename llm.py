@@ -7,13 +7,15 @@ from openinference.instrumentation.openai import OpenAIInstrumentor
 import gradio as gr
 import fitz  # PyMuPDF
 
+# for llm debugs
 # setup tracing
+'''
 tracer_provider = register(
     project_name="griqa_demo",
     endpoint="http://localhost:6006/v1/traces",
 )
 OpenAIInstrumentor().instrument(tracer_provider=tracer_provider)
-
+'''
 # carico variabili env
 load_dotenv(override=True)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -266,6 +268,7 @@ def ask_openai(messages):
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"⚠️ Error during call to OpenAI: {str(e)}"
+
 
 
 
