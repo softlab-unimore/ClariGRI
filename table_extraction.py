@@ -31,10 +31,11 @@ class UnstructuredTableExtractor:
 
         return output_pdf_path
 
-    def extract_table_unstructured(self, documents, table_placeholder="[TABLEPPLACEHOLDER {number}]"):
+
+    def extract_table_unstructured(self, documents, table_placeholder="[TABLEPLACEHOLDER {number}]"):
         """
         Output:
-        1. tables: list(tuple(table element, pdf_name, page, doc_index)))
+        1. tables: list(tuple(table element, pdf_name, page, num_table, doc_index)))
         2. text_without_tables: list(tuple(page_text, pdf_name, page, doc_index))
         page_text is str
         """
@@ -61,7 +62,7 @@ class UnstructuredTableExtractor:
             num_table = 0
             for element in elements:
                 if element.category == "Table":
-                    tables.append((element, pdf_name, page, doc_index))
+                    tables.append((element, pdf_name, page, num_table, doc_index))
                     page_text_parts.append(table_placeholder.format(number=num_table))
                     num_table += 1
                 else:
@@ -73,3 +74,4 @@ class UnstructuredTableExtractor:
             os.remove(temp_pdf_path)
 
         return tables, text_without_tables
+

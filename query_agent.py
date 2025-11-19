@@ -6,6 +6,7 @@ import io
 import re
 import contextlib
 
+
 class QueryAgent:
     def __init__(self):
         pass
@@ -71,9 +72,9 @@ class QueryAgent:
             return -1, response
 
         table.columns = table.columns.astype(str)
-        columns = [el for i,el in enumerate(table.iloc[0,:]) if i in rows_columns_extracted["columns"]]
+        columns = [el for i, el in enumerate(table.iloc[0, :]) if i in rows_columns_extracted["columns"]]
 
-        table = table[table["0"].isin(rows_columns_extracted["rows"])] # table["0"] is "index"
+        table = table[table["0"].isin(rows_columns_extracted["rows"])]# table["0"] is "index"
         table = table[[str(el) for el in rows_columns_extracted["columns"]]]
 
         # clean
@@ -138,15 +139,15 @@ class QueryAgent:
 
     def table_insertion(self, texts: list[str], tables: Dict[Union[int, str], List[pd.DataFrame]]) -> List[str]:
         """
-        Inserisce nelle stringhe 'texts' le tabelle HTML corrispondenti.
-        'tables' può essere:
-          - un dict con chiavi intere contigue (0..n-1) corrispondenti agli indici di texts, oppure
-          - un dict con chiavi arbitrarie (es. nomi di settori o filenames). In questo caso si usa l'ordine di list(tables.values()).
-        Se il numero di elementi in texts e in tables non coincide, la funzione fa un best-effort:
-          - usa min(len(texts), len(tables_list)) e non tocca i testi in eccesso.
+        Inserts the corresponding HTML tables into the “texts” strings.
+        “tables” can be:
+          - a dict with contiguous integer keys (0..n-1) corresponding to the indices of texts, or
+          - a dict with arbitrary keys (e.g. sector names or filenames). In this case, the order of list(tables.values()) is used.
+        If the number of elements in texts and tables does not match, the function makes a best-effort attempt:
+          - it uses min(len(texts), len(tables_list)) and does not touch the excess texts.
         """
-        # Normalizza tables in una lista la cui i-esima entry corrisponde al texts[i]
-        # Caso 1: chiavi numeriche contigue 0..n-1
+        # Normalise tables in a list whose i-th entry corresponds to texts[i]
+        # Case 1: contiguous numeric keys 0..n-1
         try:
             numeric_keys = False not in [all(isinstance(k, int) for k in tables[section_key].keys()) for section_key in tables.keys()]
         except Exception:
@@ -156,39 +157,38 @@ class QueryAgent:
         dict_wo_subdicts = {subkey:subvalue for subdict in tables.values() for subkey, subvalue in subdict.items()}
 
         if numeric_keys:
-            # Verifica che le chiavi siano contigue a partire da 0
+            # Verify that the keys are contiguous starting from 0
             if keys_sorted == list(range(len(keys_sorted))):
                 tables_list = [dict_wo_subdicts[i] for i in range(len(keys_sorted))]
             else:
-                # Non contigue: trasformiamo comunque in lista ordinata per chiave crescente
+                # Non-contiguous: we still transform them into an ordered list by ascending key
                 tables_list = [dict_wo_subdicts[k] for k in keys_sorted]
         else:
-            # Chiavi non numeriche: usa ordine di inserimento / values()
+            # Non-numeric keys: use insertion order / values()
             tables_list = list(dict_wo_subdicts.values())
-
 
         new_texts = []
         n = min(len(texts), len(tables_list))
-        # Per i testi oltre n, lasciamo il testo originale
+        # For texts beyond n, we leave the original text
         for i, text in enumerate(texts):
             new_text = text
             if i < n:
                 tables_for_text = tables_list[i] or []
                 for j in range(len(tables_for_text)):
-                    # protezione: assicurati che la placeholder esista nel testo prima di sostituire
+                    # protection: ensure that the placeholder exists in the text before replacing it
                     placeholder = f"<Table{j + 1}>"
                     if placeholder in new_text:
-                        # converti la table in html (index=False)
+                        # convert the table to html (index=False)
                         try:
                             new_text = new_text.replace(placeholder, tables_for_text[j].to_html(index=False))
                         except Exception as e:
-                            print(f"DEBUG: errore convertendo table[{i}][{j}] in html: {e}", flush=True)
-                            new_text = new_text.replace(placeholder, "")  # fallback: rimuovi placeholder
+                            print(f"DEBUG: error converting table[{i}][{j}] to html: {e}", flush=True)
+                            new_text = new_text.replace(placeholder, "")  # fallback: remove placeholder
                     else:
-                        # placeholder non presente: potremmo comunque appendere la tabella o ignorare; per ora ignoriamo
+                        # placeholder not present: we could still hang the table or ignore it; for now, let's ignore it
                         pass
             else:
-                print(f"DEBUG: Nessuna tabella disponibile per texts[{i}] - lascio il testo originale.", flush=True)
+                print(f"DEBUG: No table available for texts[{i}] - I'll leave the original text.", flush=True)
 
             new_texts.append(new_text)
 
@@ -273,9 +273,9 @@ class QueryAgent:
         results, error = self.execute(python_code, query, '\n\n'.join(new_texts) + "\n\n" + list_of_rules)
 
         if error:
-            return "PoT execution failed. Falling back to CoT...\n"+results, None
+            return "PoT execution failed. Falling back to CoT...\n" + results, None
 
         # Final answer
-        #results = self.remove_markdown_syntax(self.extract_result(results, "Final answer:"))
+        # results = self.remove_markdown_syntax(self.extract_result(results, "Final answer:"))
         messages.append("\n\nFinal response: "+results)
         return "".join(messages), intermediate_filtered_idx

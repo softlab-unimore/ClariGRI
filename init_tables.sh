@@ -10,7 +10,9 @@ CREATE TABLE IF NOT EXISTS "${POSTGRES_SPARSE_TABLE_NAME}" (
     page_content TEXT NOT NULL,
     page_nbr INTEGER NOT NULL,
     model_name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    company_name TEXT,
+    sectors TEXT[]
 );
 EOSQL
 

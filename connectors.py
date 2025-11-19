@@ -41,13 +41,13 @@ class PgVectorConnector:
 
     @staticmethod
     def add_page(conn, elements_to_add: tuple):
-        if len(elements_to_add) != 6:
+        if len(elements_to_add) != 8:
             raise ValueError(
-                f"the new row to add in the \"{os.environ['POSTGRES_SPARSE_TABLE_NAME']}\" table must have 4 elements")
+                f"the new row to add in the \"{os.environ['POSTGRES_SPARSE_TABLE_NAME']}\" table must have 8 elements")
         # if not all([isinstance(el, str) for el in elements_to_add]):
         # raise ValueError(f"the new row to add in the \"{os.environ['POSTGRES_SPARSE_TABLE_NAME']}\" table can only have str elements")
 
-        query = f"INSERT INTO {os.environ['POSTGRES_SPARSE_TABLE_NAME']} (id, title, source, page_content, page_nbr, model_name) VALUES(%s, %s, %s, %s, %s, %s);"
+        query = f"INSERT INTO {os.environ['POSTGRES_SPARSE_TABLE_NAME']} (id, title, source, page_content, page_nbr, model_name, company_name, company_sectors) VALUES(%s, %s, %s, %s, %s, %s, %s, %s);"
 
         with conn.cursor() as cur:
             cur.execute(query, elements_to_add)
@@ -57,13 +57,9 @@ class PgVectorConnector:
     def get_pages(conn, source):
         query = f"SELECT source, page_nbr, model_name, page_content FROM {os.environ['POSTGRES_SPARSE_TABLE_NAME']} WHERE source=%s;"
 
-        # print("\nDEBUG source: " + str(source))
-
         with conn.cursor() as cur:
             cur.execute(query, (source,))
             result = cur.fetchall()
-
-        # print("\nDEBUG result: " + str(result))
 
         docs = []
         docs_lowered = []
@@ -76,4 +72,67 @@ class PgVectorConnector:
 
         return docs, docs_lowered
 
+    @staticmethod
+    def get_all_chunks(conn, sectors):
 
+        sectors = list(sectors)
+
+        query = f""" SELECT source, page_nbr, model_name, company_sectors, page_content FROM {os.environ['POSTGRES_SPARSE_TABLE_NAME']} WHERE company_sectors &&  %s"""
+
+        with conn.cursor() as cur:
+            sql = cur.mogrify(query, (sectors,))
+            print("Query finale:", sql.decode())
+            cur.execute(query, (sectors,))
+            result = cur.fetchall()
+
+        docs = []
+        docs_lowered = []
+        for res in result:
+            doc = Document(page_content=res[-1], metadata={"page": res[1], "source": res[0], "model_name": res[2], "company_sectors": res[3]})
+            doc_lowered = Document(page_content=res[-1].lower(), metadata={"page": res[1], "source": res[0], "model_name": res[2], "company_sectors": res[3]})
+            docs.append(doc)
+            docs_lowered.append(doc_lowered)
+
+        return docs, docs_lowered
+
+    @staticmethod
+    def get_all_chunks_vectors(conn, sectors):
+
+        """
+        Returns all chunks (document + metadata + embedding)belonging to the specified sectors.
+        """
+        sectors = list(sectors)
+
+        query = f"""
+                   SELECT document,cmetadata, embedding
+                   FROM {os.environ['POSTGRES_EMB_TABLE_NAME']}
+                   WHERE  cmetadata->'company_sectors' ?| %s;
+               """
+
+        with conn.cursor() as cur:
+            sql = cur.mogrify(query, (sectors,))
+            print("Query finale:", sql.decode())
+            cur.execute(query, (sectors,))
+            results = cur.fetchall()
+
+        docs = []
+        docs_lowered = []
+
+        for document_text, metadata, embedding in results:
+            doc = Document(
+                page_content=document_text,
+                metadata=metadata
+            )
+            doc_lowered = Document(
+                page_content=document_text.lower(),
+                metadata=metadata.copy()
+            )
+
+            doc.metadata["embedding"] = embedding
+            doc_lowered.metadata["embedding"] = embedding
+
+            docs.append(doc)
+            docs_lowered.append(doc_lowered)
+        print("Totale docs_lowered:", len(docs_lowered))
+        print("Totale docs:", len(docs))
+        return docs, docs_lowered

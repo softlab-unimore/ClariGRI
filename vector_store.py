@@ -1,5 +1,7 @@
 import torch
 import os
+import numpy as np
+import json
 import functools
 import logging
 import time
@@ -67,6 +69,7 @@ class VectorStoreHandler(Handler):
 
     @functools.cache
     def get_vector_store(self, collection_name="coll"):
+
         self.vector_store = PGVector(
             embeddings=self.embeddings,
             collection_name=collection_name,
@@ -76,7 +79,7 @@ class VectorStoreHandler(Handler):
 
         return self.vector_store
 
-    def load_docs_in_vector_store(self, docs):
+    def load_docs_in_vector_store(self, docs, company_name=None, company_sectors=None):
         """
         docs: list[str] -> [
             {
@@ -92,6 +95,10 @@ class VectorStoreHandler(Handler):
         # add model_name to docs metadata
         for i in range(len(docs)):
             docs[i].metadata["model_name"] = self.model_name
+            if company_name:
+                docs[i].metadata["company_name"] = company_name
+            if company_sectors:
+                docs[i].metadata["company_sectors"] = company_sectors
 
         for doc in docs:
             hashed_input = self.hash_doc(doc)
@@ -135,7 +142,7 @@ class VectorStoreHandler(Handler):
         logger.info(f"[{datetime.now()}] Removed {ids} documents in {end_time - start_time} seconds")
 
     @functools.cache
-    def query_by_similarity(self, query, k=50, filters=(), with_scores=False):
+    def query_by_similarity(self, query, k=5, filters=(), with_scores=False):
         d_filter = {}
         for i in range(len(filters)):
             d_filter[filters[i][0]] = filters[i][1]
@@ -144,9 +151,65 @@ class VectorStoreHandler(Handler):
             result = self.vector_store.similarity_search_with_score(query, k=k, filter=d_filter)
         else:
             result = self.vector_store.similarity_search(query, k=k, filter=d_filter)
-        # print(result[:5])
 
         return result
+
+    @functools.cache
+    def query_by_similarity_with_sectors(self, query: str, filters: tuple, k: int = 5, with_scores=False):
+        """
+        Performs a similarity search only on chunks belonging to the specified sectors.
+        Also filters by model_name and source if present in the filters.
+        """
+        sectors = None
+
+        # Filter extraction
+        for key, value in filters:
+            if key == "sectors":
+                sectors = value
+
+        # Recover chunks only for specified sectors
+        conn = self.pgconnector.start_db_connection()
+        docs, docs_lowered = self.pgconnector.get_all_chunks_vectors(conn, sectors)
+        self.pgconnector.close_db_connection(conn)
+        doc_embeddings = []
+        doc_metadata = []
+        doc_contents = []
+
+        for d in docs_lowered:
+            emb_str = d.metadata.get("embedding")
+            if emb_str is None:
+                continue
+            # Convert JSON string to list of floats
+            emb = np.array(json.loads(emb_str), dtype=float)
+            doc_embeddings.append(emb)
+            doc_metadata.append(d.metadata)
+            doc_contents.append(d.page_content)
+
+        from langchain_huggingface import HuggingFaceEmbeddings
+
+        # Calculate the query embedding
+        embedder = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+        query_emb = np.array(embedder.embed_query(query))
+
+        # Calculate cosine similarity
+        doc_embeddings = np.array(doc_embeddings)
+        norm_docs = doc_embeddings / np.linalg.norm(doc_embeddings, axis=1, keepdims=True)
+        norm_query = query_emb / np.linalg.norm(query_emb)
+        similarities = np.dot(norm_docs, norm_query)
+        
+        # Sort by decreasing similarity
+        sorted_indices = np.argsort(similarities)[::-1]
+        top_indices = sorted_indices[:k]
+
+        # Builds the final results
+        results = []
+        for idx in top_indices:
+            doc = docs_lowered[idx]
+            if with_scores:
+                results.append((doc, float(similarities[idx])))
+            else:
+                results.append(doc)
+        return results
 
 
 class CustomTFIDFRetriever(TFIDFRetriever):
@@ -172,7 +235,7 @@ class SparseStoreHandler(Handler):
         self.model_name = args["syn_model_name"]
         self.pgconnector = PgVectorConnector()
 
-    def load_docs_in_sparse_store(self, docs):
+    def load_docs_in_sparse_store(self, docs, company_name=None, company_sectors=None):
         start_time = time.time()
         logger.info(f"[{datetime.now()}] Adding {len(docs)} documents into the sparse store...")
         hashes = []
@@ -180,6 +243,10 @@ class SparseStoreHandler(Handler):
         # add model_name to docs metadata
         for i in range(len(docs)):
             docs[i].metadata["model_name"] = self.model_name
+            if company_name:
+                docs[i].metadata["company_name"] = company_name
+            if company_sectors:
+                docs[i].metadata["company_sectors"] = company_sectors
 
         for doc in docs:
             hashed_input = self.hash_doc(doc)
@@ -212,7 +279,9 @@ class SparseStoreHandler(Handler):
                 doc.metadata["source"],
                 doc.page_content,
                 doc.metadata["page"],
-                self.model_name
+                self.model_name,
+                doc.metadata.get("company_name"),
+                doc.metadata.get("company_sectors")
             )
 
             self.pgconnector.add_page(conn, elements_to_add)
@@ -222,7 +291,7 @@ class SparseStoreHandler(Handler):
         logger.info(f"[{datetime.now()}] Added {len(allowed_docs)} documents in {end_time - start_time} seconds")
 
     @functools.cache
-    def query_by_similarity(self, query, source, k=50, with_scores=False):
+    def query_by_similarity(self, query, source, k=5, with_scores=False):
         conn = self.pgconnector.start_db_connection()
         docs, docs_lowered = self.pgconnector.get_pages(conn, source)
 
@@ -231,7 +300,6 @@ class SparseStoreHandler(Handler):
         retriever = self.switch_model[self.model_name].from_documents(docs_lowered)
 
         retriever.k = k
-        # results, scores = retriever.get_relevant_documents(query)
         results = retriever.invoke(query)
 
         if with_scores:
@@ -246,13 +314,44 @@ class SparseStoreHandler(Handler):
 
         return results
 
+    @functools.cache
+    def query_by_similarity_with_sectors(self, query: str, filters: tuple, k: int = 5, with_scores=False):
+        """
+        Search all chunks by filtering for specified sectors.
+        """
+        sectors = None
+
+        for key, value in filters:
+            if key == "sectors":
+                sectors = value
+
+        conn = self.pgconnector.start_db_connection()
+        docs, docs_lowered = self.pgconnector.get_all_chunks(conn, sectors)
+        self.pgconnector.close_db_connection(conn)
+
+        retriever = self.switch_model[self.model_name].from_documents(docs_lowered)
+        retriever.k = k
+
+        query_vec = retriever.vectorizer.transform([query])
+        docs_vec = retriever.tfidf_array
+        similarities = cosine_similarity(docs_vec, query_vec).reshape(-1)
+
+        top_indices = np.argsort(similarities)[::-1][:k]
+
+        if with_scores:
+            results = [(docs_lowered[i], float(similarities[i])) for i in top_indices]
+        else:
+            results = [docs_lowered[i] for i in top_indices]
+
+        return results
+
 
 class EnsembleRetrieverHandler(SparseStoreHandler, VectorStoreHandler):
     def __init__(self, args):
         super(EnsembleRetrieverHandler, self).__init__(args)
         self.lmbd = args["lambda"]
 
-    def combine_results(self, semantic_results, syntactic_results, k=50, lmbd=.3):
+    def combine_results(self, semantic_results, syntactic_results, k=5, lmbd=.3):
         results = {}
         res_debug = {}
         for i, r in enumerate([semantic_results, syntactic_results]):
@@ -280,7 +379,7 @@ class EnsembleRetrieverHandler(SparseStoreHandler, VectorStoreHandler):
         return [el[0] for el in values]
 
     @functools.cache
-    def query_by_similarity(self, query, filters, k=50):
+    def query_by_similarity(self, query, filters, k=5):
         if len(filters) == 0:
             raise ValueError(f"\"filters\" param cannot be empty")
         if filters[0][0] != "source":
@@ -289,10 +388,51 @@ class EnsembleRetrieverHandler(SparseStoreHandler, VectorStoreHandler):
             raise ValueError(f"the value of the \"source\" param must be a string")
 
         self.get_vector_store()
-        semantic_results = VectorStoreHandler.query_by_similarity(self, query, k=500, filters=filters,
+        semantic_results = VectorStoreHandler.query_by_similarity(self, query, k=5, filters=filters,
                                                                   with_scores=True)
-        syntactic_results = SparseStoreHandler.query_by_similarity(self, query, source=filters[0][1], k=500,
+        syntactic_results = SparseStoreHandler.query_by_similarity(self, query, source=filters[0][1], k=5,
                                                                    with_scores=True)
+
+        results = self.combine_results(semantic_results, syntactic_results, k=k, lmbd=self.lmbd)
+
+        return results
+
+    @functools.cache
+    def query_by_similarity_with_sectors(self, query: str, filters: tuple, k: int = 5):
+        """
+        Ensemble retrieval function with filtering by sectors.
+        filters: tuples of pairs (key, value), e.g. ((‘sectors’, (‘sector1’,‘sector2’)), (“model_name”,‘model’))
+        """
+
+        sectors = []
+        model_name = None
+        for key, value in filters:
+            if key == "sectors":
+                sectors.extend(value)
+            elif key == "model_name":
+                model_name = value
+
+        vector_filters = []
+        if sectors:
+            vector_filters.append(("company_sectors", sectors))
+        if model_name:
+            vector_filters.append(("model_name", model_name))
+
+        semantic_results = VectorStoreHandler.query_by_similarity_with_sectors(
+            self,
+            query,
+            filters=filters,
+            k=k,
+            with_scores=True
+        )
+       
+        syntactic_results = SparseStoreHandler.query_by_similarity_with_sectors(
+            self,
+            query,
+            filters=filters,
+            k=k,
+            with_scores=True
+        )
 
         results = self.combine_results(semantic_results, syntactic_results, k=k, lmbd=self.lmbd)
 

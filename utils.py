@@ -21,7 +21,7 @@ def init_args():
 
     parser.add_argument('-m', '--method', choices=["page"], default="page", type=str,
                         help='extraction method')
-    parser.add_argument('-p', '--pdf', type=str, required=True, default='',
+    parser.add_argument('-p', '--pdf', type=str, required=False, default='',
                         help='relative URI of the pdf file to analyze')
     parser.add_argument('-q', '--query', type=str, required=False, default='',
                         help=' query to be sent to the vector store')
@@ -44,6 +44,8 @@ def init_args():
                         help='path of the GRI/Description file')
     parser.add_argument('-k', '--k', type=int, required=False, default=5,
                         help='number of top-k results to consider')
+
+    parser.add_argument('-sectors', '--sectors',  nargs='+', required=False, default=[], help='list of sectors to use in a query')
 
     args = vars(parser.parse_args())
     check_args(args)
