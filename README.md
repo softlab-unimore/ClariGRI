@@ -1,4 +1,4 @@
-# ClariGRI
+# ClariGRI 🌱
 
 ClariGRI is an end-to-end system designed to extract, clean, structure, and semantically query information contained in corporate sustainability reports (PDF). It integrates LLM-based language understanding, table extraction, numerical reasoning, and sector-aware contextualization through an interactive Gradio interface. The system supports ESG analysis, report comparison, automated table extraction, and RAG-based question answering.
 
