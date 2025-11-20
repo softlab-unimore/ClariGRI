@@ -34,10 +34,10 @@ Retrieval uses a hybrid dense + sparse strategy powered by OpenAI, LangChain, an
 A single Docker container includes the Python backend, the Gradio interface, PostgreSQL with pgvector, and the full processing pipeline.
 
 
-# 📦 Installation & Setup (Docker Only)
+# 📦 Installation & Setup (Docker Only) 
 
 This is the only required setup method. No Git clone is necessary for normal usage.
-Before running ClariGRI, you must install **Docker Desktop** on your machine.
+Before running ClariGRI, you must install **Docker Desktop** on your machine.🐋
 
 Download it from:  
 https://www.docker.com/products/docker-desktop/
