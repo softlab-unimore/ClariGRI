@@ -6,7 +6,6 @@ import shutil
 import os
 import csv
 import json
-from itertools import islice
 from bs4 import BeautifulSoup
 import re
 import llm
@@ -44,7 +43,7 @@ if __name__ == "__main__":
             gri_code_to_page = {}
             tables_as_html = set()
 
-            for gri_code, description in islice(data.items(), 2, 17):  # from 3 to 17 (GRI)
+            for gri_code, description in data.items(): 
                 if gri_code not in gri_code_to_page:
                     gri_code_to_page[gri_code] = []
 
