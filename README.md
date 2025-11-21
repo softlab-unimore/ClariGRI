@@ -90,9 +90,6 @@ Replace `YOUR_OPENAI_KEY_HERE` with your actual OpenAI key.
 
 ## 3. Pull the Docker Image
 
-
-(DA PUBBLICARE)
-
 Open a shell and run the following command:
 ```console
 docker pull martasantacroce/clarigri:latest
@@ -100,7 +97,7 @@ docker pull martasantacroce/clarigri:latest
 
 ## 4. Run the Docker Container
 
-From inside your ```clarigri/``` folder:
+From inside your ```clarigri/``` folder open a shell and digit:
 ```console
 docker run --env-file .env \
   -v ./reports:/app/reports \
