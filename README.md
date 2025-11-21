@@ -58,9 +58,7 @@ clarigri/
 ```
 
 ### reports/
-Copy the entire `reports/` folder from the GitHub repository into your local directory.
-```repo → Code button → Download ZIP```
-Then extract and keep only the folder you need.
+Copy the entire `reports/` folder from the GitHub repository into your local directory. From ```repo → Code button → Download ZIP``` extract and keep only the folder you need.
 It contains example sustainability reports used by the demo. You may also add your own PDF reports inside this folder.
 
 ### table_dataset/
