@@ -68,7 +68,8 @@ ClariGRI will automatically populate it as you process reports.
 
 ## 2. Create the `.env` File
 
-Create a `.env` file inside your folder with this content:
+Create a `.env` file inside your project folder with the following content. Make sure the file is named **exactly** `.env` and does **not** have extensions like `.txt` or similar.
+
 ```env
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
