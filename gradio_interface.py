@@ -2,7 +2,6 @@ import gradio as gr
 import os
 import json
 import subprocess
-from itertools import islice
 from urllib.parse import quote
 import sys
 import llm
@@ -99,7 +98,7 @@ def upload_and_process_files(files):
         return "⚠️No file uploaded"
 
     # Percorso del file di query
-    json_file_query = os.path.join('json_config', 'en_queries_30X.json')
+    json_file_query = os.path.join('json_config', 'en_queries_301-308.json')
     with open(json_file_query, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -169,7 +168,7 @@ def upload_and_process_files(files):
 
         output_lines = [f"📁**{pdf_basename_orig}** -- company name **{company_name}** \n "]
 
-        for gri_code, description in islice(data.items(), 2, 17):  # from 2 to 17 (GRI)
+        for gri_code, description in data.items:  
             if gri_code in metadata:
                 gri_line = f"   🔹**GRI {gri_code}**: {description}  "
                 output_lines.append(gri_line)
@@ -825,4 +824,5 @@ if __name__ == "__main__":
         demo.load(concurrency_limit=None, fn=gradio_actions.refresh_sectors_list, inputs=[], outputs=[sectors_list])
 
     demo.launch()
+
 
