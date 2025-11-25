@@ -541,7 +541,7 @@ def render_cards():
 
 with gr.Blocks() as chatbot_ui:
     gr.Markdown(
-        "<h2 style='text-align: center; font-size: 40px;'>ClariGRI</h2>"
+        "<h2 style='text-align: center; font-size: 40px;'>ClariESG</h2>"
     )
 
     with gr.Row():
@@ -806,7 +806,7 @@ if __name__ == "__main__":
 
     with gr.Blocks(
             theme='lone17/kotaemon',
-            title="ClariGRI",
+            title="ClariESG",
             css_paths="style.css",
 
     ) as demo:
@@ -824,5 +824,6 @@ if __name__ == "__main__":
         demo.load(concurrency_limit=None, fn=gradio_actions.refresh_sectors_list, inputs=[], outputs=[sectors_list])
 
     demo.launch()
+
 
 
