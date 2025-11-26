@@ -16,8 +16,14 @@
     overflow-y: auto !important;
     padding: 5px !important;
 }
-/* Limit height for sectors_list choices */
+/* Limit height for sectors_list and sector_selector_cards choices */
 #sectors_list .wrap {
+    max-height: 150px !important;
+    overflow-y: auto !important;
+    padding: 5px !important;
+}
+
+#sector_selector_cards .wrap {
     max-height: 150px !important;
     overflow-y: auto !important;
     padding: 5px !important;
@@ -81,6 +87,35 @@
     width: 100% !important;
     border-collapse: collapse;
 }
+
+/* Layout principale della pagina delle cards */
+#cards-layout {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    width: 100%;
+    align-items: flex-start;
+    margin-top: 10px;
+}
+
+/* Colonna sinistra: selector settori */
+#cards-layout > .gr-column:nth-child(1) {
+    flex: 0 0 250px;     /* larghezza fissa della colonna sinistra */
+    max-width: 250px;
+}
+
+/* Colonna destra: container cards */
+#cards-layout > .gr-column:nth-child(2) {
+    flex: 1;             /* si espande */
+    max-width: calc(100% - 250px);
+}
+
+/* Rende il selector scrollabile se lungo */
+#sector_selector_cards .wrap {
+    max-height: 300px !important;
+    overflow-y: auto !important;
+}
+
 
 /* Responsive tweak */
 @media (max-width: 600px) {
