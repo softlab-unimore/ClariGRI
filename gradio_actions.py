@@ -24,7 +24,8 @@ def get_sectors_from_db():
     query = f"""
             SELECT DISTINCT unnest(company_sectors) 
             FROM {os.environ['POSTGRES_SPARSE_TABLE_NAME']}
-            WHERE company_sectors IS NOT NULL;
+            WHERE company_sectors IS NOT NULL
+            ORDER BY unnest(company_sectors) ;
         """
 
     with conn.cursor() as cur:
@@ -34,6 +35,27 @@ def get_sectors_from_db():
     sectors = [row[0] for row in result if row[0]]
     connector.close_db_connection(conn)
     return sectors
+
+
+def filter_company_cards(selected_sectors):
+
+    connector = PgVectorConnector()
+    conn = connector.start_db_connection()
+
+    # Costruisco la query per filtrare gli array company_sectors
+    placeholders = ",".join(["%s"] * len(selected_sectors))
+    query = f"""
+        SELECT DISTINCT title
+        FROM {os.environ['POSTGRES_SPARSE_TABLE_NAME']}
+        WHERE company_sectors && ARRAY[{placeholders}]::text[];
+    """
+
+    with conn.cursor() as cur:
+        cur.execute(query, selected_sectors)
+        filtered_companies = [row[0] for row in cur.fetchall()]
+
+    connector.close_db_connection(conn)
+    return filtered_companies
 
 
 def update_docs_list():
