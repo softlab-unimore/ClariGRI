@@ -84,7 +84,7 @@ messages = [
             "- For every factual element you mention, provide a clickable link to the exact page of the PDF, "
             "  using this format: "
             "  [pag.page_number](http://{server_host}:8080/viewer.html?file=pdf_basename.pdf#page=page_number) "
-            "  where `pdf_basename` is given inside the user context. "
+            "  where `pdf_basename` is given inside the user context and `page_number` is the page in the context plus one. "
             "- Do not explain your reasoning; give only the final answer with the required links."
         )
     },
@@ -112,7 +112,7 @@ messages_sectors = [
             "- For every factual element you mention, provide a clickable link to the exact PDF page "
             "  using the format: "
             "  [pag.page_number](http://{server_host}:8080/viewer.html?file=pdf_basename.pdf#page=page_number) "
-            "  where `pdf_basename` is included for each company within the context.\n"
+            "  where `pdf_basename` is included for each company within the context and `page_number` is the page in the context plus one.\n"
             "- The link replaces the explicit mention of company name, page number, and table number.\n"
             "- If the answer cannot be found in the context, say so explicitly.\n"
             "- Do not explain your reasoning process; only provide the final answer with the required links."
@@ -909,6 +909,7 @@ if __name__ == "__main__":
         demo.load(concurrency_limit=None, fn=gradio_actions.refresh_sectors_list, inputs=[], outputs=[sectors_list])
 
     demo.launch()
+
 
 
 
