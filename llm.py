@@ -161,7 +161,7 @@ def formatted(folder_path, pdf_basename, chatbot=False):
         prompt = f"""
 
         You are given the content of a CSV file automatically extracted from a table. 
-        Your task is to clean and reformat it into a valid table, ensuring that **all rows have the same number of columns**.
+        Your task is to clean and reformat it into a valid table, ensuring that **all rows have the same number of columns** (is mandatory!).
         
         Follow these rules strictly:
         
@@ -180,7 +180,7 @@ def formatted(folder_path, pdf_basename, chatbot=False):
            - Remove symbols or characters that are clearly OCR or extraction noise.
         9. Output **only the cleaned CSV content**, no explanations or comments.
         
-        REMEMBER THAT ALL ROWS MUST HAVE THE SAME NUMBER OF FIELDS!
+        REMEMBER THAT ALL ROWS MUST HAVE THE SAME NUMBER OF FIELDS! If you have a row with extra fields, delete the excess fields. 
         
         Here is the CSV to process:
 
@@ -268,6 +268,7 @@ def ask_openai(messages):
         return response.choices[0].message.content.strip()
     except Exception as e:
         return f"⚠️ Error during call to OpenAI: {str(e)}"
+
 
 
 
