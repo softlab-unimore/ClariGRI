@@ -87,7 +87,7 @@ OPENAI_MODEL_NAME=gpt-4o-mini
 OPENAI_TEMPERATURE=0.2
 ```
 
-Replace `YOUR_OPENAI_KEY_HERE` with your actual OpenAI key.
+Replace `YOUR_OPENAI_KEY_HERE` with your actual OpenAI key. You can create one here: https://platform.openai.com/docs/quickstart/step-2-set-up-your-api-key
 
 ## 3. Pull the Docker Image
 
