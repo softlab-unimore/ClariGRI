@@ -30,16 +30,13 @@ class QueryAgent:
         text = text.replace("python", "")
         return text.strip()
 
-    def extract_result(self, text: str, pattern: str, opposite=False) -> str:
+    def extract_result(self, text: str, pattern: str) -> str:
         position = text.lower().rfind(pattern.lower())
         if position == -1:
             print(f"Cannot find pattern '{pattern}' in '{text}'. Defaulting to '{text}'...")
             return text
         else:
             position += len(pattern)
-
-        if opposite:
-            return text[:position].strip()
         return text[position:].strip()
 
     def filter_table(self, query: str, table: pd.DataFrame) -> Union[tuple[pd.DataFrame, str], tuple[int, str]]:
@@ -214,7 +211,7 @@ class QueryAgent:
             sector_question = True
 
         messages = [
-            "To answer the question, let's focus on the following tables. Interesting values are highlighted."
+            "To answer the question, let's focus on the following tables."
         ]
         intermediate_filtered_idx = {}
         intermediate_tables = {}
@@ -243,6 +240,9 @@ class QueryAgent:
                         #intermediate_tables[key].append(filtered_table)
 
         table_txt = ""
+
+        # print("intermediate_tables: " + str(intermediate_tables), flush=True)
+
         for sector_key in intermediate_tables.keys():
             if sector_question:
                 table_txt += f"The company below are inside the following sector: {sector_key}\n\n"
@@ -268,7 +268,7 @@ class QueryAgent:
                 "content": prompt,
             }
         ])
-        messages.append("\n\n# 🧠 Program of Thought\n\n"+self.remove_markdown_syntax(self.extract_result(python_text_raw, "Final answer:", opposite=True))+"\n"+self.extract_result(python_text_raw, "Final answer:"))
+        messages.append("\n\n# 🧠 Program of Thought\n\n"+python_text_raw)
         python_code = self.remove_markdown_syntax(self.extract_result(python_text_raw, "Final answer:"))
         results, error = self.execute(python_code, query, '\n\n'.join(new_texts) + "\n\n" + list_of_rules)
 
@@ -279,3 +279,4 @@ class QueryAgent:
         # results = self.remove_markdown_syntax(self.extract_result(results, "Final answer:"))
         messages.append("\n\nFinal response: "+results)
         return "".join(messages), intermediate_filtered_idx
+
