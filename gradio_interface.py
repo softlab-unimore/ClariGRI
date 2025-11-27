@@ -83,7 +83,7 @@ messages = [
             "- If you cannot find the answer from the context, say so clearly. "
             "- For every factual element you mention, provide a clickable link to the exact page of the PDF, "
             "  using this format: "
-            "  [pag.page_number](http://{server_host}/viewer.html?file=pdf_basename.pdf#page=page_number) "
+            "  [pag.page_number](http://{server_host}:8080/viewer.html?file=pdf_basename.pdf#page=page_number) "
             "  where `pdf_basename` is given inside the user context. "
             "- Do not explain your reasoning; give only the final answer with the required links."
         )
@@ -909,6 +909,7 @@ if __name__ == "__main__":
         demo.load(concurrency_limit=None, fn=gradio_actions.refresh_sectors_list, inputs=[], outputs=[sectors_list])
 
     demo.launch()
+
 
 
 
