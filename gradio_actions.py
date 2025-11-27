@@ -74,7 +74,7 @@ def print_like_dislike(x: gr.LikeData):
 
 def refresh_pdf_folders():
     folders = list_pdf_folders()
-    return gr.update(choices=folders, value=folders[0] if folders else None)
+    return gr.update(choices=folders, value=None)
 
 
 def refresh_docs_list():
