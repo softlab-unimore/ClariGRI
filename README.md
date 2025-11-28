@@ -93,7 +93,7 @@ Replace `YOUR_OPENAI_KEY_HERE` with your actual OpenAI key. You can create one h
 
 Open a shell and run the following command:
 ```console
-docker pull martasantacroce/clariesg:latest
+docker pull martasantacroce/clariesg_demo:latest
 ```
 
 ## 4. Run the Docker Container
@@ -107,7 +107,7 @@ docker run --name clariesg_container \
   -p 7860:7860 \
   -p 5432:5432 \
   -p 8080:8080 \
-  martasantacroce/clariesg:latest
+  martasantacroce/clariesg_demo:latest
 ```
 This command:
 
