@@ -93,14 +93,15 @@ Replace `YOUR_OPENAI_KEY_HERE` with your actual OpenAI key. You can create one h
 
 Open a shell and run the following command:
 ```console
-docker pull martasantacroce/clariesg:latest
+docker pull --platform linux/amd64 martasantacroce/clariesg:latest
 ```
 
 ## 4. Run the Docker Container
 
 From inside your ```clariesg/``` folder open a shell and digit:
 ```console
-docker run --name clariesg_container \
+docker run --platform linux/amd64 \
+  --name clariesg_container \
   --env-file .env \
   -v ./reports:/app/reports \
   -v ./table_dataset:/app/table_dataset \
